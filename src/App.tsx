@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Layout, Menu, Button, Modal, Form, Input, Card, Badge, Typography, Divider } from 'antd';
 import { PlusOutlined, SettingOutlined, UploadOutlined, HistoryOutlined, PlayCircleOutlined } from '@ant-design/icons';
 import { useAppStore, saveDeployHistory, getDeployHistory } from './store';
@@ -30,7 +30,12 @@ interface Project {
 const App: React.FC = () => {
   const [isModalVisible, setIsModalVisible] = React.useState(false);
   const [form] = Form.useForm();
-  const { projects, selectedProject, status, logs, addProject, selectProject, updateStatus, addLog } = useAppStore();
+  const { projects, selectedProject, status, logs, addProject, selectProject, updateStatus, addLog, loadProjects } = useAppStore();
+
+  // 加载项目列表
+  useEffect(() => {
+    loadProjects();
+  }, [loadProjects]);
 
   const showModal = () => {
     setIsModalVisible(true);
@@ -76,11 +81,11 @@ const App: React.FC = () => {
     updateStatus('部署中');
     addLog('开始部署...');
     // 模拟部署过程
-    setTimeout(() => {
+    setTimeout(async () => {
       updateStatus('部署成功');
       addLog('部署成功！');
       // 保存部署历史
-      saveDeployHistory({
+      await saveDeployHistory({
         id: Date.now().toString(),
         projectId: selectedProject?.id || '',
         timestamp: Date.now(),
@@ -94,11 +99,11 @@ const App: React.FC = () => {
     updateStatus('上传中');
     addLog('开始上传 dist 包...');
     // 模拟上传过程
-    setTimeout(() => {
+    setTimeout(async () => {
       updateStatus('上传成功');
       addLog('上传成功！');
       // 保存部署历史
-      saveDeployHistory({
+      await saveDeployHistory({
         id: Date.now().toString(),
         projectId: selectedProject?.id || '',
         timestamp: Date.now(),
@@ -108,11 +113,11 @@ const App: React.FC = () => {
     }, 1500);
   };
 
-  const handleViewHistory = () => {
+  const handleViewHistory = async () => {
     addLog('查看部署历史...');
     // 获取部署历史
     if (selectedProject) {
-      const history = getDeployHistory(selectedProject.id) as Array<{
+      const history = await getDeployHistory(selectedProject.id) as Array<{
         id: string;
         projectId: string;
         timestamp: number;
@@ -125,9 +130,27 @@ const App: React.FC = () => {
     }
   };
 
+  const handleBrowsePath = async () => {
+    try {
+      const { ipcRenderer } = require('electron');
+      const { canceled, filePaths } = await ipcRenderer.invoke('show-open-dialog', {
+        properties: ['openDirectory'],
+        title: '选择项目文件夹',
+      });
+      console.log('选择的文件路径:', filePaths);
+      console.log('是否取消选择:', canceled);
+      if (!canceled && filePaths && filePaths.length > 0) {
+        // 处理选择的文件路径
+        form.setFieldValue('path', filePaths[0]);
+      }
+    } catch (error) {
+      console.error('浏览文件夹出错:', error);
+    }
+  };
+
   return (
     <Layout style={{ height: '100vh' }}>
-      <Sider width={256} style={{ backgroundColor: '#001529' }}>
+      <Sider width={256} style={{ backgroundColor: '#001529', height: '100vh', overflow: 'hidden' }}>
         <div style={{ height: 64, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontSize: 18, fontWeight: 'bold' }}>
           Auto Build
         </div>
@@ -137,9 +160,7 @@ const App: React.FC = () => {
           defaultSelectedKeys={[]}
           style={{ height: '100%', borderRight: 0 }}
         >
-          <Menu.Item key="add" icon={<PlusOutlined />} onClick={showModal}>
-            新增项目
-          </Menu.Item>
+
           <Menu.SubMenu key="projects" title="项目列表">
             {projects.map(project => (
               <Menu.Item key={project.id} onClick={() => handleProjectSelect(project)}>
@@ -147,12 +168,17 @@ const App: React.FC = () => {
               </Menu.Item>
             ))}
           </Menu.SubMenu>
+
+          <Menu.Item key="add" icon={<PlusOutlined />} onClick={showModal}>
+            新增项目
+          </Menu.Item>
+
           <Menu.Item key="settings" icon={<SettingOutlined />}>
             设置
           </Menu.Item>
         </Menu>
       </Sider>
-      <Layout style={{ display: 'flex', flexDirection: 'column' }}>
+      <Layout style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
         <Content style={{ flex: 1, padding: 24, overflow: 'auto' }}>
           {selectedProject ? (
             <Card title={selectedProject.name} style={{ width: '100%' }}>
@@ -212,7 +238,10 @@ const App: React.FC = () => {
             <Input />
           </Form.Item>
           <Form.Item name="path" label="项目路径" rules={[{ required: true, message: '请输入项目路径' }]}>
-            <Input />
+            <Input.Group compact>
+              <Input style={{ flex: 1 }} />
+              <Button type="default" onClick={handleBrowsePath}>浏览</Button>
+            </Input.Group>
           </Form.Item>
           <Form.Item name="description" label="项目描述">
             <Input.TextArea />
