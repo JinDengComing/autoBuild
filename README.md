@@ -1,0 +1,2 @@
+# autoBuild
+一个electron桌面应用,用于前端工程化打包及推送至ssh服务器,进行docker镜像打包,最后利用ssh脚本推送至阿里云仓库.
